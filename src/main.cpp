@@ -24,11 +24,13 @@ const int buzzer_channel = 0;
 char timeStr_HM[6];
 char timeStr_S[3];  
 char dateStr[7];
+char merediumStr[3];
 
-//ICON DATA
+
+//MENU ICON DATA
                               //alarm, timer, stopwatch, flash, dino, settings
 const uint16_t iconGlyphs[] = {0x014B, 0x01F9, 0x01E9, 0x018E, 0x006D, 0x015B};
-const uint8_t iconX[] = {10 ,55 ,100 ,145};  // fixed X positions for each icon (145 for the offscreen icon for smooth animation)
+const uint8_t iconX[] = {10 , 55, 100, 145};  // fixed X positions for each icon (145 for the offscreen icon for smooth animation)
 const int iconY = 48; // fixed Y position for each icon (same for all)
 const int iconNumber = sizeof(iconGlyphs) / sizeof(iconGlyphs[0]); // # of icons 
 
@@ -36,7 +38,17 @@ int selectedIndexIcon = 1;  //index of current selected icon (counts up to indic
 int firstVisibleIndex = 0;  //index of first icon being shown on the display 
 int boxedIcon = 1;  // always middle icon!
 
+//SETTINGS MENU ICON DATA      //time_set, brightness, sound, temp
+const uint16_t settingGlyphs[] = {0x0154, 0x0292, 0x01E4, 0x02BC};  
+const int setIconNumber = sizeof(settingGlyphs) / sizeof(settingGlyphs[0]);
+
+int selectedSettingIcon = 1;
+int firstVisibleSettingIndex = 0;
+int boxedSettingIcon = 1;
+
+
 //SCROLLING ANIMATION
+bool menuScrolling = false;
 bool setScrolling = false;
 int scrollOffset = 0; //current offset (in pixels)
 int scrollDist = 45;  //desired distance for icon to travel (from 10 to 55 --> x-positions)
@@ -87,6 +99,9 @@ int flashContrast = 255;
 const int contrasts[] = {0, 225};
 int contrastIndex = 0;
 
+//SETTING VARIABLES
+char tempStr[8];
+
 
 
 //SCREEN MODE (tabs)
@@ -98,7 +113,11 @@ enum ScreenMode {
   MODE_ALARM,
   MODE_SETTINGS,
   MODE_FLASH,
-  MODE_DINO
+  MODE_DINO,
+  MODE_SET,
+  MODE_BRIGHT,
+  MODE_SOUND,
+  MODE_TEMP
 };
 
 enum TimerMode {
@@ -114,7 +133,7 @@ enum StopMode{
   STOP_PAUSE,
 };
 
-ScreenMode currentMode = MODE_STOPWATCH;
+ScreenMode currentMode = MODE_SETTINGS;      //change for each screen
 TimerMode timerMode = TIMER_SETUP;
 StopMode stopMode = STOP_START;
 
@@ -125,7 +144,6 @@ void beep();
 void formatTime();
 void dateDisp();
 
-void formatTimer();
 void timerMinIncrement();
 void timerRun();
 void timerPause();
@@ -140,6 +158,12 @@ void drawMenuScreen();
 void drawTimerScreen();
 void drawStopWatchScreen();
 void drawFlashScreen();
+void drawAlarmScreen();
+void drawSettingsScreen();
+void drawSetScreen();
+void drawBrightnessScreen();
+void drawSoundScreen();
+void drawTempScreen();
 
 void scrollAutomate();
 
@@ -170,7 +194,6 @@ void loop() {
   formatTime();
   dateDisp();
 
-  formatTimer();
   formatStop();
 
   if(flashScreenExit){
@@ -187,6 +210,10 @@ void loop() {
     }
 
     else if(currentMode == MODE_MENU){
+      menuScrolling = true;
+    }
+
+    else if(currentMode == MODE_SETTINGS){
       setScrolling = true;
     }
 
@@ -246,7 +273,25 @@ void loop() {
         case 4: currentMode = MODE_DINO;
         break;
 
-        case 5: currentMode = MODE_SETTINGS;
+        case 5: currentMode = MODE_SETTINGS; setScrolling = false; scrollOffset = 0;
+        break;
+      }
+    }
+
+    if(currentMode == MODE_SETTINGS){
+
+      switch(selectedSettingIcon){
+
+        case 0: currentMode = MODE_SET;
+        break;
+
+        case 1: currentMode = MODE_BRIGHT;
+        break;
+
+        case 2: currentMode = MODE_SOUND;
+        break;
+
+        case 3: currentMode = MODE_TEMP; drawTempScreen();
         break;
       }
     }
@@ -317,6 +362,11 @@ void loop() {
       drawHomeScreen();
       break;
 
+    case MODE_SETTINGS:
+      drawSettingsScreen();
+      Serial.println("DRAWING SETTINGS");
+    break;
+
     case MODE_MENU:
       drawMenuScreen();
       break;
@@ -333,6 +383,9 @@ void loop() {
       drawStopWatchScreen();
     break;
 
+    case MODE_ALARM:
+      drawAlarmScreen();
+    break;
   }  
 
 
@@ -386,10 +439,11 @@ void drawHomeScreen() {
   u8g2.setFont(u8g2_font_sirclivethebold_tr); 
   u8g2.drawStr(38, 10, dateStr);    //date
   u8g2.drawStr(100 ,45, timeStr_S); //seconds
+  u8g2.drawStr(100, 30, merediumStr);
 
   //HH:MM display on homescreen
   u8g2.setFont(u8g2_font_freedoomr25_tn); 
-  u8g2.drawStr(10,48, timeStr_HM); //hours and minutes
+  u8g2.drawStr(8,48, timeStr_HM); //hours and minutes
 
 
   //battery icon (might change into actual icons from font)
@@ -404,7 +458,7 @@ void drawMenuScreen(){
   u8g2.clearBuffer();
 
   u8g2.setFont(u8g2_font_sirclivethebold_tr); 
-  u8g2.drawStr(40, 10, "MENU");
+  u8g2.drawStr(42 , 10, "MENU");
 
   u8g2.setFont(u8g2_font_streamline_all_t);
 
@@ -413,9 +467,27 @@ void drawMenuScreen(){
       u8g2.drawGlyph(iconX[i] - scrollOffset, iconY, iconGlyphs[iconIndex]);
   }
 
-    u8g2.drawFrame(iconX[1] - 4, 23, 28, 28);   //selection box
+  u8g2.drawFrame(iconX[1] - 4, 23, 28, 28);   //selection box
 
 
+
+  u8g2.sendBuffer();
+}
+
+void drawSettingsScreen(){
+  u8g2.clearBuffer();
+
+  u8g2.setFont(u8g2_font_sirclivethebold_tr); 
+  u8g2.drawStr(27 , 10, "SETTINGS");
+
+  u8g2.setFont(u8g2_font_streamline_all_t);
+
+ for (int i = 0; i < 4; i++) {
+      int iconIndex = (firstVisibleSettingIndex + i) % setIconNumber;
+      u8g2.drawGlyph(iconX[i] - scrollOffset, iconY, settingGlyphs[iconIndex]);
+  }
+
+  u8g2.drawFrame(iconX[1] - 4, 23, 28, 28);   //selection box
 
   u8g2.sendBuffer();
 }
@@ -459,13 +531,46 @@ void drawStopWatchScreen(){
 
 }
 
+void drawAlarmScreen(){
+  u8g2.clearBuffer();
 
-//add AM and PM later
+  u8g2.setFont(u8g2_font_sirclivethebold_tr); 
+  u8g2.drawStr(35, 10, "ALARM");
+  u8g2.drawStr(15, 62, "M T W T F S S");
+
+  u8g2.setFont(u8g2_font_freedoomr25_tn);
+  u8g2.drawStr(20, 48, "00:00");
+
+  u8g2.sendBuffer();
+
+}
+
+void drawTempScreen(){
+  u8g2.clearBuffer();
+
+  u8g2.setFont(u8g2_font_sirclivethebold_tr);
+  u8g2.drawStr(25, 10, "TEMPERATURE");
+
+  u8g2.setFont(u8g2_font_streamline_all_t);
+  u8g2.drawGlyph(iconX[0], iconY, settingGlyphs[3]);
+
+  u8g2.setFont(u8g2_font_freedoomr25_tn);
+  u8g2.drawStr(25, 48, tempStr);
+}
+
+//change name later
 void formatTime(){
   DateTime now = rtc.now();
 
   snprintf(timeStr_HM, sizeof(timeStr_HM), "%2d:%02d", now.twelveHour(), now.minute());
   snprintf(timeStr_S, sizeof(timeStr_S), "%02d", now.second());
+  snprintf(merediumStr, sizeof(merediumStr), "%s", now.isPM() ? "PM" : "AM" );
+
+  //timer
+  snprintf(timerStr, sizeof(timerStr), "%02d:%02d", timerMin, timerSec);
+
+  //temp
+  snprintf(tempStr, sizeof(tempStr), "%.2f C", rtc.getTemperature());
 }
 
 void dateDisp(){
@@ -473,10 +578,6 @@ void dateDisp(){
 
   const char* weekdays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
   snprintf(dateStr, sizeof(dateStr), "%s %02d", weekdays[now.dayOfTheWeek()], now.day());
-}
-
-void formatTimer(){
-  snprintf(timerStr, sizeof(timerStr), "%02d:%02d", timerMin, timerSec);
 }
 
 void timerMinIncrement(){
@@ -541,9 +642,6 @@ void formatStop(){
 }
 
 void stopWatchRun(){
-
-  //maybe add stopwatch hour (to make it a 24 hour stopwatch)
-
   if(stopRunning){
     stopMilli = ((millis() - prevStopMillis) % 1000) / 10; //values go from 0-99
 
@@ -597,9 +695,21 @@ void scrollAutomate(){
 
   if(currentMode == MODE_MENU){
 
-      if(BPress(B_next)){
-        setScrolling = true;
-      }    
+      if(menuScrolling == true){
+        scrollOffset += scrollSpeed;  
+
+        if(scrollOffset >= scrollDist){
+          scrollOffset = 0;           //reset the scroll offset for animation
+          menuScrolling = false;
+
+          // update the selected icon (through its index) and the scroll display (first visible icon becomes the  next icon through indexing)
+          selectedIndexIcon = (selectedIndexIcon + 1) % iconNumber;
+          firstVisibleIndex = (firstVisibleIndex + 1) % iconNumber;
+        }
+      }
+    }
+
+    if(currentMode == MODE_SETTINGS){
 
       if(setScrolling == true){
         scrollOffset += scrollSpeed;  
@@ -609,12 +719,11 @@ void scrollAutomate(){
           setScrolling = false;
 
           // update the selected icon (through its index) and the scroll display (first visible icon becomes the  next icon through indexing)
-          selectedIndexIcon = (selectedIndexIcon + 1) % iconNumber;
-          firstVisibleIndex = (firstVisibleIndex + 1) % iconNumber;
+          selectedSettingIcon = (selectedSettingIcon + 1) % setIconNumber;
+          firstVisibleSettingIndex = (firstVisibleSettingIndex + 1) % setIconNumber;
         }
       }
-  
-    drawMenuScreen(); // update screen
-  }
+    }
+
 }
 
