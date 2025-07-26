@@ -49,7 +49,6 @@ int boxedSettingIcon = 1;
 
 //SCROLLING ANIMATION
 bool menuScrolling = false;
-bool setScrolling = false;
 int scrollOffset = 0; //current offset (in pixels)
 int scrollDist = 45;  //desired distance for icon to travel (from 10 to 55 --> x-positions)
 int scrollSpeed = 12;  //12 pixels/frame
@@ -114,8 +113,9 @@ enum ScreenMode {
   MODE_SETTINGS,
   MODE_FLASH,
   MODE_DINO,
+
   MODE_SET,
-  MODE_BRIGHT,
+  MODE_BRIGHTNESS,
   MODE_SOUND,
   MODE_TEMP
 };
@@ -133,9 +133,19 @@ enum StopMode{
   STOP_PAUSE,
 };
 
-ScreenMode currentMode = MODE_SETTINGS;      //change for each screen
+/** 
+enum SettingMode{
+  MODE_SETMENU,
+  MODE_SETTIME,
+  MODE_BRIGHTNESS,
+  MODE_SOUND,
+  MODE_TEMP
+};
+*/
+ScreenMode currentMode = MODE_HOME;      //change for each screen
 TimerMode timerMode = TIMER_SETUP;
 StopMode stopMode = STOP_START;
+
 
 bool BPress(int button);
 
@@ -209,23 +219,15 @@ void loop() {
       currentMode = MODE_MENU;
     }
 
-    else if(currentMode == MODE_MENU){
+    else if(currentMode == MODE_MENU || currentMode == MODE_SETTINGS){
       menuScrolling = true;
     }
 
-    else if(currentMode == MODE_SETTINGS){
-      setScrolling = true;
-    }
+    else if(currentMode == MODE_TIMER){
 
-
-
-    if(currentMode == MODE_TIMER){
-                  
-      if(timerMode == TIMER_SETUP){ 
-
+      if(timerMode == TIMER_SETUP){
         timerMinIncrement();
-
-      } 
+      }
     }
   }
 
@@ -247,7 +249,7 @@ void loop() {
       currentMode = MODE_MENU;
       flashScreenExit = true;
     }
-    else if(currentMode != MODE_MENU || currentMode != MODE_HOME){
+    else if(currentMode != MODE_MENU && currentMode != MODE_HOME){
       currentMode =  MODE_MENU;
     }
   }
@@ -273,11 +275,14 @@ void loop() {
         case 4: currentMode = MODE_DINO;
         break;
 
-        case 5: currentMode = MODE_SETTINGS; setScrolling = false; scrollOffset = 0;
+        case 5: currentMode = MODE_SETTINGS; 
         break;
       }
     }
 
+    /**
+     * 
+     
     if(currentMode == MODE_SETTINGS){
 
       switch(selectedSettingIcon){
@@ -295,6 +300,7 @@ void loop() {
         break;
       }
     }
+      */
     
 
     if(currentMode == MODE_TIMER){
@@ -362,14 +368,13 @@ void loop() {
       drawHomeScreen();
       break;
 
-    case MODE_SETTINGS:
-      drawSettingsScreen();
-      Serial.println("DRAWING SETTINGS");
-    break;
-
     case MODE_MENU:
       drawMenuScreen();
       break;
+
+    case MODE_SETTINGS:
+      drawSettingsScreen();
+    break;
 
     case MODE_FLASH:
       drawFlashScreen();
@@ -386,6 +391,19 @@ void loop() {
     case MODE_ALARM:
       drawAlarmScreen();
     break;
+
+    case MODE_SET:
+    break;
+
+    case MODE_BRIGHTNESS:
+    break;
+
+    case MODE_SOUND:
+    break;
+
+    case MODE_TEMP:
+    break;
+
   }  
 
 
@@ -689,7 +707,6 @@ void beep() {
 }
 
 
-
 //scrolling automation/animation
 void scrollAutomate(){
 
@@ -711,12 +728,12 @@ void scrollAutomate(){
 
     if(currentMode == MODE_SETTINGS){
 
-      if(setScrolling == true){
+      if(menuScrolling == true){
         scrollOffset += scrollSpeed;  
 
         if(scrollOffset >= scrollDist){
           scrollOffset = 0;           //reset the scroll offset for animation
-          setScrolling = false;
+          menuScrolling = false;
 
           // update the selected icon (through its index) and the scroll display (first visible icon becomes the  next icon through indexing)
           selectedSettingIcon = (selectedSettingIcon + 1) % setIconNumber;
