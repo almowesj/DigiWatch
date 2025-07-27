@@ -113,11 +113,6 @@ enum ScreenMode {
   MODE_SETTINGS,
   MODE_FLASH,
   MODE_DINO,
-
-  MODE_SET,
-  MODE_BRIGHTNESS,
-  MODE_SOUND,
-  MODE_TEMP
 };
 
 enum TimerMode {
@@ -133,18 +128,19 @@ enum StopMode{
   STOP_PAUSE,
 };
 
-/** 
-enum SettingMode{
-  MODE_SETMENU,
-  MODE_SETTIME,
+
+enum SettingsMode{
+  MODE_TIME,
   MODE_BRIGHTNESS,
   MODE_SOUND,
-  MODE_TEMP
+  MODE_TEMP,
+  MODE_SCREEN
 };
-*/
-ScreenMode currentMode = MODE_HOME;      //change for each screen
+
+ScreenMode currentMode = MODE_SETTINGS;      //change for each screen
 TimerMode timerMode = TIMER_SETUP;
 StopMode stopMode = STOP_START;
+SettingsMode setMode = MODE_SCREEN;
 
 
 bool BPress(int button);
@@ -279,29 +275,7 @@ void loop() {
         break;
       }
     }
-
-    /**
-     * 
-     
-    if(currentMode == MODE_SETTINGS){
-
-      switch(selectedSettingIcon){
-
-        case 0: currentMode = MODE_SET;
-        break;
-
-        case 1: currentMode = MODE_BRIGHT;
-        break;
-
-        case 2: currentMode = MODE_SOUND;
-        break;
-
-        case 3: currentMode = MODE_TEMP; drawTempScreen();
-        break;
-      }
-    }
-      */
-    
+          
 
     if(currentMode == MODE_TIMER){
 
@@ -357,7 +331,30 @@ void loop() {
 
     }
 
+
+    if(currentMode == MODE_SETTINGS){
+
+      switch(selectedSettingIcon){
+
+        case 0: setMode = MODE_TIME;
+        break;
+
+        case 1: setMode = MODE_BRIGHTNESS;
+        break;
+
+        case 2: setMode = MODE_SOUND;
+        break;
+
+        case 3: setMode = MODE_TEMP;
+        Serial.println("SETMODE = TEMP");
+        break;
+
+        case 4: setMode = MODE_SCREEN;
+        break;
+      }   
+    }
   }
+
 
   scrollAutomate();
     
@@ -390,18 +387,6 @@ void loop() {
 
     case MODE_ALARM:
       drawAlarmScreen();
-    break;
-
-    case MODE_SET:
-    break;
-
-    case MODE_BRIGHTNESS:
-    break;
-
-    case MODE_SOUND:
-    break;
-
-    case MODE_TEMP:
     break;
 
   }  
@@ -442,6 +427,23 @@ void loop() {
       stopRunning = false;
       break;
 
+  }
+
+  switch(setMode){
+
+    case MODE_TIME:
+      break;
+
+    case MODE_BRIGHTNESS:
+      break;
+
+    case MODE_SOUND:
+      break;
+
+    case MODE_TEMP:
+      drawTempScreen();
+      Serial.println("DRAW TEMO SCREEN");
+      break;
   }
 
 
