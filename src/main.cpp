@@ -128,19 +128,20 @@ enum StopMode{
   STOP_PAUSE,
 };
 
-
-enum SettingsMode{
-  MODE_TIME,
-  MODE_BRIGHTNESS,
-  MODE_SOUND,
-  MODE_TEMP,
-  MODE_SCREEN
+enum SettingMode {
+  SET_NONE,
+  SET_TIME,
+  SET_BRIGHTNESS,
+  SET_SOUND,
+  SET_TEMP
 };
 
-ScreenMode currentMode = MODE_SETTINGS;      //change for each screen
+
+ScreenMode currentMode = MODE_MENU;      //change for each screen
 TimerMode timerMode = TIMER_SETUP;
 StopMode stopMode = STOP_START;
-SettingsMode setMode = MODE_SCREEN;
+SettingMode settingMode = SET_NONE;
+
 
 
 bool BPress(int button);
@@ -245,6 +246,17 @@ void loop() {
       currentMode = MODE_MENU;
       flashScreenExit = true;
     }
+
+    else if(currentMode == MODE_SETTINGS){
+
+      if(settingMode != SET_NONE){
+        settingMode = SET_NONE;
+      }
+      else{
+        currentMode = MODE_MENU;
+      }
+
+    }
     else if(currentMode != MODE_MENU && currentMode != MODE_HOME){
       currentMode =  MODE_MENU;
     }
@@ -271,7 +283,7 @@ void loop() {
         case 4: currentMode = MODE_DINO;
         break;
 
-        case 5: currentMode = MODE_SETTINGS; 
+        case 5: currentMode = MODE_SETTINGS; settingMode = SET_NONE;  selectedSettingIcon = 0; firstVisibleSettingIndex = 0;
         break;
       }
     }
@@ -333,26 +345,24 @@ void loop() {
 
 
     if(currentMode == MODE_SETTINGS){
-
       switch(selectedSettingIcon){
-
-        case 0: setMode = MODE_TIME;
+        case 0: settingMode = SET_TIME; 
         break;
 
-        case 1: setMode = MODE_BRIGHTNESS;
+        case 1: settingMode = SET_BRIGHTNESS; 
         break;
 
-        case 2: setMode = MODE_SOUND;
+        case 2: settingMode = SET_SOUND; 
         break;
 
-        case 3: setMode = MODE_TEMP;
-        Serial.println("SETMODE = TEMP");
+        case 3: settingMode = SET_TEMP; 
         break;
 
-        case 4: setMode = MODE_SCREEN;
+        case 4: settingMode = SET_NONE;
         break;
-      }   
+      }
     }
+
   }
 
 
@@ -371,7 +381,7 @@ void loop() {
 
     case MODE_SETTINGS:
       drawSettingsScreen();
-    break;
+      break;
 
     case MODE_FLASH:
       drawFlashScreen();
@@ -388,7 +398,6 @@ void loop() {
     case MODE_ALARM:
       drawAlarmScreen();
     break;
-
   }  
 
 
@@ -428,24 +437,6 @@ void loop() {
       break;
 
   }
-
-  switch(setMode){
-
-    case MODE_TIME:
-      break;
-
-    case MODE_BRIGHTNESS:
-      break;
-
-    case MODE_SOUND:
-      break;
-
-    case MODE_TEMP:
-      drawTempScreen();
-      Serial.println("DRAW TEMO SCREEN");
-      break;
-  }
-
 
 }
 
@@ -495,22 +486,22 @@ void drawMenuScreen(){
 }
 
 void drawSettingsScreen(){
+
   u8g2.clearBuffer();
 
   u8g2.setFont(u8g2_font_sirclivethebold_tr); 
   u8g2.drawStr(27 , 10, "SETTINGS");
 
   u8g2.setFont(u8g2_font_streamline_all_t);
-
- for (int i = 0; i < 4; i++) {
-      int iconIndex = (firstVisibleSettingIndex + i) % setIconNumber;
+  for (int i = 0; i < 4; i++) {
+       int iconIndex = (firstVisibleSettingIndex + i) % setIconNumber;
       u8g2.drawGlyph(iconX[i] - scrollOffset, iconY, settingGlyphs[iconIndex]);
   }
-
   u8g2.drawFrame(iconX[1] - 4, 23, 28, 28);   //selection box
-
+  
   u8g2.sendBuffer();
 }
+
 
 void drawTimerScreen(){
   u8g2.clearBuffer();
@@ -569,13 +560,13 @@ void drawTempScreen(){
   u8g2.clearBuffer();
 
   u8g2.setFont(u8g2_font_sirclivethebold_tr);
-  u8g2.drawStr(25, 10, "TEMPERATURE");
+  u8g2.drawStr(6, 10, "INTERNAL TEMP");
 
   u8g2.setFont(u8g2_font_streamline_all_t);
-  u8g2.drawGlyph(iconX[0], iconY, settingGlyphs[3]);
+  u8g2.drawGlyph(iconX[0] - 6, iconY + 2, settingGlyphs[3]);
 
   u8g2.setFont(u8g2_font_freedoomr25_tn);
-  u8g2.drawStr(25, 48, tempStr);
+  u8g2.drawStr(34, 52, tempStr);
 }
 
 //change name later
@@ -743,6 +734,5 @@ void scrollAutomate(){
         }
       }
     }
-
 }
 
