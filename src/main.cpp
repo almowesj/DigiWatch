@@ -29,14 +29,13 @@ char merediumStr[3];
 
 //MENU ICON DATA
                               //alarm, timer, stopwatch, flash, dino, settings
-const uint16_t iconGlyphs[] = {0x014B, 0x01F9, 0x01E9, 0x018E, 0x006D, 0x015B};
+const uint16_t iconGlyphs[] = {0x014B, 0x01F9, 0x01E9, 0x018E, 0x015B};
 const uint8_t iconX[] = {10 , 55, 100, 145};  // fixed X positions for each icon (145 for the offscreen icon for smooth animation)
 const int iconY = 48; // fixed Y position for each icon (same for all)
 const int iconNumber = sizeof(iconGlyphs) / sizeof(iconGlyphs[0]); // # of icons 
 
 int selectedIndexIcon = 1;  //index of current selected icon (counts up to indicate icon change)
 int firstVisibleIndex = 0;  //index of first icon being shown on the display 
-int boxedIcon = 1;  // always middle icon!
 
 //SETTINGS MENU ICON DATA      //time_set, brightness, sound, temp
 const uint16_t settingGlyphs[] = {0x0154, 0x0292, 0x01E4, 0x02BC};  
@@ -44,7 +43,6 @@ const int setIconNumber = sizeof(settingGlyphs) / sizeof(settingGlyphs[0]);
 
 int selectedSettingIcon = 1;
 int firstVisibleSettingIndex = 0;
-int boxedSettingIcon = 1;
 
 
 //SCROLLING ANIMATION
@@ -89,8 +87,10 @@ int stopMilli = 0;
 int stopHour = 0;
 int prevStopMillis = 0;
 
-//FLASH VARIABLES
+//FLASH + BRIGHTNESS VARIABLES
 int defaultContrast = 255;
+int brightContrast = 255;
+
 
 bool flashScreenOpen = false;
 bool flashScreenExit = false;
@@ -101,7 +101,11 @@ int contrastIndex = 0;
 //SETTING VARIABLES
 char tempStr[8];
 
+//SOUND VARIABLES
+int defaultBeep = 76;
+int buzzBeep = defaultBeep;  
 
+//RINGTONE VARIABLES
 
 //SCREEN MODE (tabs)
 enum ScreenMode {
@@ -112,7 +116,8 @@ enum ScreenMode {
   MODE_ALARM,
   MODE_SETTINGS,
   MODE_FLASH,
-  MODE_DINO,
+
+  MODE_SUBSCREEN   
 };
 
 enum TimerMode {
@@ -128,21 +133,20 @@ enum StopMode{
   STOP_PAUSE,
 };
 
-enum SettingMode {
-  SET_NONE,
+enum SettingsMode {
   SET_TIME,
   SET_BRIGHTNESS,
   SET_SOUND,
-  SET_TEMP
+  SET_TEMP,
+
+  SET_NONE
 };
 
 
-ScreenMode currentMode = MODE_MENU;      //change for each screen
+ScreenMode currentMode = MODE_SETTINGS;      //change for each screen
 TimerMode timerMode = TIMER_SETUP;
 StopMode stopMode = STOP_START;
-SettingMode settingMode = SET_NONE;
-
-
+SettingsMode  settingsMode = SET_NONE;
 
 bool BPress(int button);
 
@@ -159,6 +163,8 @@ void timerOver();
 void formatStop();
 void stopWatchRun();
 
+void brightnessAdjust();
+void beepAdjust();
 
 void drawHomeScreen();
 void drawMenuScreen();
@@ -167,7 +173,6 @@ void drawStopWatchScreen();
 void drawFlashScreen();
 void drawAlarmScreen();
 void drawSettingsScreen();
-void drawSetScreen();
 void drawBrightnessScreen();
 void drawSoundScreen();
 void drawTempScreen();
@@ -202,6 +207,7 @@ void loop() {
   dateDisp();
 
   formatStop();
+
 
   if(flashScreenExit){
     u8g2.setContrast(defaultContrast);
@@ -246,21 +252,15 @@ void loop() {
       currentMode = MODE_MENU;
       flashScreenExit = true;
     }
-
-    else if(currentMode == MODE_SETTINGS){
-
-      if(settingMode != SET_NONE){
-        settingMode = SET_NONE;
-      }
-      else{
-        currentMode = MODE_MENU;
-      }
-
+    else if(currentMode == MODE_SUBSCREEN){
+      currentMode = MODE_SETTINGS;
+      settingsMode = SET_NONE;
     }
     else if(currentMode != MODE_MENU && currentMode != MODE_HOME){
       currentMode =  MODE_MENU;
     }
   }
+  //ADD SETTINGS SCREEN EXITING
 
   if(BPress(B_select)){
       
@@ -280,15 +280,23 @@ void loop() {
         case 3: currentMode  = MODE_FLASH; flashScreenOpen = true; contrastIndex = 0;
         break;
 
-        case 4: currentMode = MODE_DINO;
-        break;
-
-        case 5: currentMode = MODE_SETTINGS; settingMode = SET_NONE;  selectedSettingIcon = 0; firstVisibleSettingIndex = 0;
-        break;
+        case 4: currentMode = MODE_SETTINGS;  selectedSettingIcon = 0; firstVisibleSettingIndex = 0; scrollOffset = 0;
+        return;
       }
     }
-          
 
+    if(currentMode == MODE_SETTINGS){
+      switch(selectedSettingIcon){
+        case 0: settingsMode = SET_BRIGHTNESS; break;
+        case 1: settingsMode = SET_SOUND; break;
+        case 2: settingsMode = SET_TEMP; break;
+        case 3: settingsMode = SET_TIME; break;
+        default: settingsMode = SET_NONE; break;
+      }
+      currentMode = MODE_SUBSCREEN;
+    }
+
+    
     if(currentMode == MODE_TIMER){
 
       if(timerScreenJustOpened){
@@ -343,26 +351,6 @@ void loop() {
 
     }
 
-
-    if(currentMode == MODE_SETTINGS){
-      switch(selectedSettingIcon){
-        case 0: settingMode = SET_TIME; 
-        break;
-
-        case 1: settingMode = SET_BRIGHTNESS; 
-        break;
-
-        case 2: settingMode = SET_SOUND; 
-        break;
-
-        case 3: settingMode = SET_TEMP; 
-        break;
-
-        case 4: settingMode = SET_NONE;
-        break;
-      }
-    }
-
   }
 
 
@@ -373,23 +361,36 @@ void loop() {
 
     case MODE_HOME:
       drawHomeScreen();
-      break;
+    break;
 
     case MODE_MENU:
       drawMenuScreen();
-      break;
+    break;
 
     case MODE_SETTINGS:
       drawSettingsScreen();
-      break;
+    break;
+
+    case MODE_SUBSCREEN:
+      switch(settingsMode) {
+        case SET_TIME: /* draw time screen */ 
+        break;
+        case SET_BRIGHTNESS: drawBrightnessScreen(); brightnessAdjust();
+        break;
+        case SET_SOUND: drawSoundScreen(); beepAdjust();
+        break;
+        case SET_TEMP: drawTempScreen(); 
+        break;
+      } 
+    break;
 
     case MODE_FLASH:
       drawFlashScreen();
-      break;
+    break;
     
     case MODE_TIMER:
       drawTimerScreen();
-      break;
+    break;
 
     case MODE_STOPWATCH:
       drawStopWatchScreen();
@@ -567,7 +568,54 @@ void drawTempScreen(){
 
   u8g2.setFont(u8g2_font_freedoomr25_tn);
   u8g2.drawStr(34, 52, tempStr);
+
+  u8g2.sendBuffer();
 }
+
+void drawBrightnessScreen(){
+  u8g2.clearBuffer();
+
+  u8g2.setFont(u8g2_font_sirclivethebold_tr);
+  u8g2.drawStr(18, 12, "BRIGHTNESS"); 
+
+  u8g2.drawFrame(33, iconY - 14, 93, 10); // outline bar
+  u8g2.drawBox(33, iconY - 14, map(defaultContrast, 0, 255, 0, 93), 10); // filled
+
+  char buf[12];
+  int percentBright = (brightContrast*100)/255;
+
+  snprintf(buf, sizeof(buf), "%d%%", percentBright);
+  u8g2.drawStr(iconX[0] - 10, iconY + 10, buf);
+
+  u8g2.setFont(u8g2_font_streamline_all_t);
+  u8g2.drawGlyph(iconX[0] - 6, iconY, settingGlyphs[1]);
+
+  u8g2.sendBuffer();
+}
+
+void drawSoundScreen(){
+  u8g2.clearBuffer();
+
+  u8g2.setFont(u8g2_font_sirclivethebold_tr);
+  u8g2.drawStr(40, 10, "SOUND"); 
+
+  u8g2.drawFrame(33, iconY - 14, 93, 10); // outline bar
+  u8g2.drawBox(33, iconY - 14, map(buzzBeep, 0, 76, 0, 93), 10); // filled
+
+  char buf[12];
+  int percentBeep = (buzzBeep*100)/76;
+
+  snprintf(buf, sizeof(buf), "%d%%", percentBeep);
+  u8g2.drawStr(iconX[0] - 10, iconY + 10, buf);
+
+  u8g2.setFont(u8g2_font_streamline_all_t);
+  u8g2.drawGlyph(iconX[0] - 6, iconY, settingGlyphs[2]);
+
+  u8g2.sendBuffer();
+}
+
+
+
 
 //change name later
 void formatTime(){
@@ -675,6 +723,28 @@ void stopWatchRun(){
   }
 }
 
+void brightnessAdjust(){
+
+  if(BPress(B_next)){
+    brightContrast += 51;
+
+    if(brightContrast > 255){
+      brightContrast = 255;
+    }
+  }
+
+  if(BPress(B_select)){
+    brightContrast -= 51;
+
+    if(brightContrast < 0){
+      brightContrast = 0;
+    }
+  }
+
+  defaultContrast = brightContrast;
+  u8g2.setContrast(defaultContrast);
+}
+
 //debouncing for buttons + indicator of button being pressed --> returns true , PULLUP --> Active Low
 bool BPress(int button){
   if(digitalRead(button) == LOW){   //button is pressed
@@ -694,10 +764,32 @@ bool BPress(int button){
 }
 
 void beep() {
-  ledcWrite(buzzer_channel, 76);  // 33% duty cycle (76 out of 255)
+  ledcWrite(buzzer_channel, buzzBeep);  // 33% duty cycle (76 out of 255)
   delay(50);                // beep duration
   ledcWrite(buzzer_channel, 0);    // turn off buzzer
 }
+
+void beepAdjust(){
+
+  if(BPress(B_next)){
+    buzzBeep += 19;
+
+    if(buzzBeep > 76){
+      buzzBeep = 76;
+    }
+  }
+  
+  if(BPress(B_select)){
+    buzzBeep -= 19;
+
+    if(buzzBeep < 0){
+      buzzBeep = 0;
+    }
+  }
+
+  defaultBeep = buzzBeep;
+}
+
 
 
 //scrolling automation/animation
