@@ -28,7 +28,7 @@ char merediumStr[3];
 
 
 //MENU ICON DATA
-                              //alarm, timer, stopwatch, flash, dino, settings
+                              //alarm, timer, stopwatch, flash, settings
 const uint16_t iconGlyphs[] = {0x014B, 0x01F9, 0x01E9, 0x018E, 0x015B};
 const uint8_t iconX[] = {10 , 55, 100, 145};  // fixed X positions for each icon (145 for the offscreen icon for smooth animation)
 const int iconY = 48; // fixed Y position for each icon (same for all)
@@ -106,9 +106,40 @@ int defaultBeep = 76;
 int buzzBeep = defaultBeep;  
 
 //RINGTONE VARIABLES
+const int melody[] = {
+  2636, 2636, 2636, 2093, 2636, 3136, 1568,
+  2093, 1568, 1319, 1760, 1976, 1864, 1760, 1568,
+  2636, 3136, 3520, 2793, 3136, 2636, 2093 // basic Nokia tones (freqs in Hz)
+};
+const int durations[] = {
+  150, 150, 150, 150, 150, 300, 300  // ms for each note
+};
+const int numNotes = sizeof(melody) / sizeof(melody[0]);
+
+
+//TIME-SETTING VARIABLES
+int editHour = 0;
+int editMin = 0;
+int editSec = 0;
+
+int editWeekDay = 0;
+int editDay = 0;
+int editMonth = 0;
+int editYear = 2025;
+
+bool isPM = true;
+
+const char* weekdays[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+
+int dateArrowX[] = {13, 43, 79, 115};
+int timeArrowX[] = {16, 48, 80, 110};
+
+int arrowRow = 0; // 0 = date & 1 = time
+int arrowCol = 0; //arrow index
+
 
 //SCREEN MODE (tabs)
-enum ScreenMode {
+enum ScreenMode{
   MODE_HOME,
   MODE_MENU,
   MODE_STOPWATCH,
@@ -120,7 +151,7 @@ enum ScreenMode {
   MODE_SUBSCREEN   
 };
 
-enum TimerMode {
+enum TimerMode{
   TIMER_SETUP,
   TIMER_PAUSE,
   TIMER_RUN,
@@ -133,7 +164,7 @@ enum StopMode{
   STOP_PAUSE,
 };
 
-enum SettingsMode {
+enum SettingsMode{
   SET_TIME,
   SET_BRIGHTNESS,
   SET_SOUND,
@@ -142,15 +173,29 @@ enum SettingsMode {
   SET_NONE
 };
 
+enum TimeSettingState {
+  SET_WEEKDAY, 
+  SET_DAY,      
+  SET_MONTH,    
+  SET_YEAR,     
+  SET_HOUR,     
+  SET_MINUTE,
+  SET_SECOND,   
+  SET_AMPM,     
+};
 
-ScreenMode currentMode = MODE_SETTINGS;      //change for each screen
+
+
+ScreenMode currentMode = MODE_MENU;      //change for each screen
 TimerMode timerMode = TIMER_SETUP;
 StopMode stopMode = STOP_START;
 SettingsMode  settingsMode = SET_NONE;
+TimeSettingState currentSetting = SET_WEEKDAY;
 
 bool BPress(int button);
 
 void beep();
+void ringtone();
 
 void formatTime();
 void dateDisp();
@@ -176,6 +221,7 @@ void drawSettingsScreen();
 void drawBrightnessScreen();
 void drawSoundScreen();
 void drawTempScreen();
+void drawTimeSetScreen();
 
 void scrollAutomate();
 
@@ -208,7 +254,7 @@ void loop() {
 
   formatStop();
 
-
+  
   if(flashScreenExit){
     u8g2.setContrast(defaultContrast);
     flashScreenOpen = false;
@@ -230,6 +276,25 @@ void loop() {
 
       if(timerMode == TIMER_SETUP){
         timerMinIncrement();
+      }
+    }
+
+    else if(currentMode == MODE_SUBSCREEN && settingsMode == SET_TIME){
+      if(arrowRow == 0){
+        arrowCol++;
+
+        if(arrowCol >= 4){
+          arrowRow = 1;
+        }
+
+      }
+      else if(arrowRow == 1){
+        arrowCol++;
+
+        if(arrowCol >= 8){  //loop back around
+          arrowCol = 0;
+          arrowRow = 0;
+        }
       }
     }
   }
@@ -373,7 +438,7 @@ void loop() {
 
     case MODE_SUBSCREEN:
       switch(settingsMode) {
-        case SET_TIME: /* draw time screen */ 
+        case SET_TIME: drawTimeSetScreen(); 
         break;
         case SET_BRIGHTNESS: drawBrightnessScreen(); brightnessAdjust();
         break;
@@ -614,6 +679,30 @@ void drawSoundScreen(){
   u8g2.sendBuffer();
 }
 
+void drawTimeSetScreen() {
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_sirclivethebold_tr);
+
+  u8g2.drawStr(20, 12, "DATE | TIME");
+
+  u8g2.drawStr(0, 35, "Sun 00 / 00 / 25");
+
+  u8g2.drawStr(8, 60, "00 : 00 : 00  AM");
+
+  //arrow
+
+
+  u8g2.setFont(u8g2_font_6x12_m_symbols);
+  if(arrowRow == 0){  //date
+    u8g2.drawGlyph(dateArrowX[arrowCol], 25, 0x25BE);
+  }
+  else{               //time
+    u8g2.drawGlyph(timeArrowX[arrowCol], 50, 0x25BE);
+  }
+
+  u8g2.sendBuffer();
+}
+
 
 
 
@@ -684,13 +773,8 @@ void timerRun(){
 
 
 void timerOver() {
-  for(int i = 0; i < 3; i++){
-    delay(150);
-    beep();
-    delay(300); // brief pause between beeps
-    beep();
-  }
-
+  ringtone();
+  timerIndex = 0;
   timerMode = TIMER_SETUP;
 }
 
@@ -788,6 +872,46 @@ void beepAdjust(){
   }
 
   defaultBeep = buzzBeep;
+}
+
+void ringtone() {
+  int orginalBeep = defaultBeep;
+
+  const int melody[] = {
+    2636, 3136, 2793, 2349,
+    2636, 3136, 3520, 2793,
+    2636, 2636, 2093, 2349
+  };
+
+  const int durations[] = {
+    150, 150, 150, 150,
+    150, 150, 200, 200,
+    150, 100, 150, 200
+  };
+
+  const int numNotes = sizeof(melody) / sizeof(melody[0]);
+
+  for (int i = 0; i < numNotes; i++) {
+    ledcWriteTone(buzzer_channel, melody[i]);
+    ledcWrite(buzzer_channel, 65); 
+    delay(durations[i]);
+
+    ledcWrite(buzzer_channel, 0);
+    delay(30); //short pause between notes
+  }
+
+  //short fade-out tone for smooth ending
+  ledcWriteTone(buzzer_channel, 2093);  
+  for(int duty = 76; duty >= 0; duty -= 8) {
+    ledcWrite(buzzer_channel, duty);
+    delay(20);
+  }
+
+  ledcWrite(buzzer_channel, 0);         //fully off
+  ledcWriteTone(buzzer_channel, 0);     //stop tone
+
+  buzzBeep = orginalBeep;
+  ledcSetup(buzzer_channel, 4000, 8);
 }
 
 
